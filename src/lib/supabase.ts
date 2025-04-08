@@ -1,12 +1,12 @@
-import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
-import NetInfo from '@react-native-community/netinfo';
+import "react-native-url-polyfill/auto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient } from "@supabase/supabase-js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@env";
+import NetInfo from "@react-native-community/netinfo";
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Missing Supabase environment variables');
-}
+// Use default values if environment variables are not set
+const supabaseUrl = SUPABASE_URL || "https://your-project-url.supabase.co";
+const supabaseAnonKey = SUPABASE_ANON_KEY || "your-anon-key";
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -15,7 +15,7 @@ const RETRY_DELAY = 1000; // 1 second
 // Custom fetch implementation with retry logic
 const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   let lastError;
-  
+
   for (let i = 0; i < MAX_RETRIES; i++) {
     try {
       const response = await fetch(input, init);
@@ -26,15 +26,17 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     } catch (error) {
       lastError = error;
       if (i < MAX_RETRIES - 1) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (i + 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_DELAY * (i + 1)),
+        );
       }
     }
   }
-  
+
   throw lastError;
 };
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
@@ -42,11 +44,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     detectSessionInUrl: false,
   },
   global: {
-    headers: { 'x-application-name': 'speeqa' },
+    headers: { "x-application-name": "speeqa" },
     fetch: customFetch,
   },
   db: {
-    schema: 'public',
+    schema: "public",
   },
   realtime: {
     params: {
@@ -58,7 +60,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Network status monitoring
 let isOnline = true;
 
-NetInfo.addEventListener(state => {
+NetInfo.addEventListener((state) => {
   isOnline = state.isConnected ?? false;
 });
 
