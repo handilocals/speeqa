@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from './AuthContext';
+import React, { createContext, useContext, useState, useCallback } from "react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "./AuthContext";
 
 export interface Post {
   id: string;
@@ -32,9 +32,17 @@ interface PostContextType {
   dislikePost: (postId: string) => Promise<void>;
   repostPost: (postId: string) => Promise<void>;
   bookmarkPost: (postId: string) => Promise<void>;
-  editPost: (postId: string, content: string, image_url?: string) => Promise<void>;
+  editPost: (
+    postId: string,
+    content: string,
+    image_url?: string,
+  ) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
-  createPost: (content: string, imageUrl?: string, quotePostId?: string) => Promise<Post>;
+  createPost: (
+    content: string,
+    imageUrl?: string,
+    quotePostId?: string,
+  ) => Promise<Post>;
 }
 
 const PostContext = createContext<PostContextType | undefined>(undefined);
@@ -47,64 +55,73 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
 
   const fetchPosts = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       setLoading(true);
       // First fetch all posts with user information
       const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select(`
+        .from("posts")
+        .select(
+          `
           *,
           user:profiles (
             username,
             avatar_url
           )
-        `)
-        .order('created_at', { ascending: false });
+        `,
+        )
+        .order("created_at", { ascending: false });
 
       if (postsError) throw postsError;
 
       // Then fetch the user's interactions
       const { data: likesData, error: likesError } = await supabase
-        .from('post_likes')
-        .select('post_id')
-        .eq('user_id', user.id);
+        .from("post_likes")
+        .select("post_id")
+        .eq("user_id", user.id);
 
       const { data: dislikesData, error: dislikesError } = await supabase
-        .from('post_dislikes')
-        .select('post_id')
-        .eq('user_id', user.id);
+        .from("post_dislikes")
+        .select("post_id")
+        .eq("user_id", user.id);
 
       const { data: repostsData, error: repostsError } = await supabase
-        .from('post_reposts')
-        .select('post_id')
-        .eq('user_id', user.id);
+        .from("post_reposts")
+        .select("post_id")
+        .eq("user_id", user.id);
 
       const { data: bookmarksData, error: bookmarksError } = await supabase
-        .from('post_bookmarks')
-        .select('post_id')
-        .eq('user_id', user.id);
+        .from("post_bookmarks")
+        .select("post_id")
+        .eq("user_id", user.id);
 
       if (likesError || dislikesError || repostsError || bookmarksError) {
-        throw new Error('Failed to fetch interactions');
+        throw new Error("Failed to fetch interactions");
       }
 
       // Create Sets for efficient lookup
-      const likedPostIds = new Set(likesData?.map(like => like.post_id));
-      const dislikedPostIds = new Set(dislikesData?.map(dislike => dislike.post_id));
-      const repostedPostIds = new Set(repostsData?.map(repost => repost.post_id));
-      const bookmarkedPostIds = new Set(bookmarksData?.map(bookmark => bookmark.post_id));
+      const likedPostIds = new Set(likesData?.map((like) => like.post_id));
+      const dislikedPostIds = new Set(
+        dislikesData?.map((dislike) => dislike.post_id),
+      );
+      const repostedPostIds = new Set(
+        repostsData?.map((repost) => repost.post_id),
+      );
+      const bookmarkedPostIds = new Set(
+        bookmarksData?.map((bookmark) => bookmark.post_id),
+      );
 
       // Combine the data
-      const postsWithInteractions = postsData?.map(post => ({
-        ...post,
-        username: post.user?.username,
-        avatar_url: post.user?.avatar_url,
-        is_liked: likedPostIds.has(post.id),
-        is_disliked: dislikedPostIds.has(post.id),
-        is_reposted: repostedPostIds.has(post.id),
-        is_bookmarked: bookmarkedPostIds.has(post.id)
-      })) || [];
+      const postsWithInteractions =
+        postsData?.map((post) => ({
+          ...post,
+          username: post.user?.username,
+          avatar_url: post.user?.avatar_url,
+          is_liked: likedPostIds.has(post.id),
+          is_disliked: dislikedPostIds.has(post.id),
+          is_reposted: repostedPostIds.has(post.id),
+          is_bookmarked: bookmarkedPostIds.has(post.id),
+        })) || [];
 
       setPosts(postsWithInteractions);
     } catch (err: any) {
@@ -118,39 +135,43 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
-      const post = posts.find(p => p.id === postId);
+      const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
       if (post.is_liked) {
         // Unlike the post
         const { error } = await supabase
-          .from('post_likes')
+          .from("post_likes")
           .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+          .eq("post_id", postId)
+          .eq("user_id", user.id);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_liked: false, likes_count: p.likes_count - 1 }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId
+              ? { ...p, is_liked: false, likes_count: p.likes_count - 1 }
+              : p,
+          ),
+        );
       } else {
         // Like the post
         const { error } = await supabase
-          .from('post_likes')
+          .from("post_likes")
           .insert([{ post_id: postId, user_id: user.id }]);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_liked: true, likes_count: p.likes_count + 1 }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId
+              ? { ...p, is_liked: true, likes_count: p.likes_count + 1 }
+              : p,
+          ),
+        );
       }
     } catch (err: any) {
       setError(err.message);
@@ -161,39 +182,51 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
-      const post = posts.find(p => p.id === postId);
+      const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
       if (post.is_disliked) {
         // Undislike the post
         const { error } = await supabase
-          .from('post_dislikes')
+          .from("post_dislikes")
           .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+          .eq("post_id", postId)
+          .eq("user_id", user.id);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_disliked: false, dislikes_count: p.dislikes_count - 1 }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  is_disliked: false,
+                  dislikes_count: p.dislikes_count - 1,
+                }
+              : p,
+          ),
+        );
       } else {
         // Dislike the post
         const { error } = await supabase
-          .from('post_dislikes')
+          .from("post_dislikes")
           .insert([{ post_id: postId, user_id: user.id }]);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_disliked: true, dislikes_count: p.dislikes_count + 1 }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  is_disliked: true,
+                  dislikes_count: p.dislikes_count + 1,
+                }
+              : p,
+          ),
+        );
       }
     } catch (err: any) {
       setError(err.message);
@@ -204,54 +237,56 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
-      const post = posts.find(p => p.id === postId);
+      const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
       if (post.is_reposted) {
         // Unrepost the post
         const { error } = await supabase
-          .from('post_reposts')
+          .from("post_reposts")
           .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+          .eq("post_id", postId)
+          .eq("user_id", user.id);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_reposted: false, reposts_count: p.reposts_count - 1 }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId
+              ? { ...p, is_reposted: false, reposts_count: p.reposts_count - 1 }
+              : p,
+          ),
+        );
       } else {
         // Create a new repost
-        const { error: repostError } = await supabase
-          .from('posts')
-          .insert([
-            {
-              content: post.content,
-              image_url: post.image_url,
-              user_id: user.id,
-              original_post_id: postId,
-              is_repost: true
-            }
-          ]);
+        const { error: repostError } = await supabase.from("posts").insert([
+          {
+            content: post.content,
+            image_url: post.image_url,
+            user_id: user.id,
+            original_post_id: postId,
+            is_repost: true,
+          },
+        ]);
 
         if (repostError) throw repostError;
 
         // Add to reposts table
         const { error: interactionError } = await supabase
-          .from('post_reposts')
+          .from("post_reposts")
           .insert([{ post_id: postId, user_id: user.id }]);
 
         if (interactionError) throw interactionError;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_reposted: true, reposts_count: p.reposts_count + 1 }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId
+              ? { ...p, is_reposted: true, reposts_count: p.reposts_count + 1 }
+              : p,
+          ),
+        );
       }
     } catch (err: any) {
       setError(err.message);
@@ -262,58 +297,62 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
-      const post = posts.find(p => p.id === postId);
+      const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
       if (post.is_bookmarked) {
         // Unbookmark the post
         const { error } = await supabase
-          .from('post_bookmarks')
+          .from("post_bookmarks")
           .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+          .eq("post_id", postId)
+          .eq("user_id", user.id);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_bookmarked: false }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId ? { ...p, is_bookmarked: false } : p,
+          ),
+        );
       } else {
         // Bookmark the post
         const { error } = await supabase
-          .from('post_bookmarks')
+          .from("post_bookmarks")
           .insert([{ post_id: postId, user_id: user.id }]);
 
         if (error) throw error;
 
         // Update local state
-        setPosts(posts.map(p => 
-          p.id === postId 
-            ? { ...p, is_bookmarked: true }
-            : p
-        ));
+        setPosts(
+          posts.map((p) =>
+            p.id === postId ? { ...p, is_bookmarked: true } : p,
+          ),
+        );
       }
     } catch (err: any) {
       setError(err.message);
     }
   };
 
-  const editPost = async (postId: string, content: string, image_url?: string) => {
-    if (!user) throw new Error('User not authenticated');
+  const editPost = async (
+    postId: string,
+    content: string,
+    image_url?: string,
+  ) => {
+    if (!user) throw new Error("User not authenticated");
 
     try {
       const { error } = await supabase
-        .from('posts')
-        .update({ 
+        .from("posts")
+        .update({
           content,
           image_url,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', postId)
-        .eq('user_id', user.id);
+        .eq("id", postId)
+        .eq("user_id", user.id);
 
       if (error) throw error;
       fetchPosts();
@@ -324,31 +363,44 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deletePost = async (postId: string) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user) throw new Error("User not authenticated");
 
     try {
       const { error } = await supabase
-        .from('posts')
+        .from("posts")
         .delete()
-        .eq('id', postId)
-        .eq('user_id', user.id);
+        .eq("id", postId)
+        .eq("user_id", user.id);
 
       if (error) throw error;
-      setPosts(posts.filter(post => post.id !== postId));
+      setPosts(posts.filter((post) => post.id !== postId));
     } catch (err: any) {
       setError(err.message);
       throw err;
     }
   };
 
-  const createPost = async (content: string, imageUrl?: string, quotePostId?: string) => {
-    if (!user) throw new Error('User not authenticated');
+  const createPost = async (
+    content: string,
+    imageUrl?: string,
+    quotePostId?: string,
+  ) => {
+    if (!user) throw new Error("User not authenticated");
 
     try {
+      console.log("Creating post with data:", {
+        content,
+        imageUrl,
+        quotePostId,
+        userId: user.id,
+      });
+
       const postData = {
         content,
         image_url: imageUrl,
         user_id: user.id,
+        original_post_id: quotePostId || null,
+        is_repost: quotePostId ? true : false,
         likes_count: 0,
         dislikes_count: 0,
         comments_count: 0,
@@ -357,25 +409,40 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from('posts')
+      console.log("Post data being sent to Supabase:", postData);
+
+      // First insert the post without trying to fetch the profile data
+      const { data: insertedPost, error: insertError } = await supabase
+        .from("posts")
         .insert([postData])
-        .select(`
-          *,
-          user:profiles (
-            username,
-            avatar_url
-          )
-        `)
+        .select("*")
         .single();
 
-      if (error) {
-        console.error('Error creating post:', error);
-        throw error;
+      if (insertError) {
+        console.error("Error inserting post:", insertError);
+        throw insertError;
       }
 
+      console.log("Post inserted successfully:", insertedPost);
+
+      // Then fetch the profile data separately
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("username, avatar_url")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Error fetching profile for post:", profileError);
+      }
+
+      const data = {
+        ...insertedPost,
+        user: profileData || { username: "user", avatar_url: "" },
+      };
+
       // Update local state with the new post
-      setPosts(currentPosts => [
+      setPosts((currentPosts) => [
         {
           ...data,
           username: data.user?.username,
@@ -384,17 +451,17 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
           is_disliked: false,
           is_reposted: false,
           is_bookmarked: false,
-          likes_count: 0,
-          dislikes_count: 0,
-          comments_count: 0,
-          reposts_count: 0
+          likes_count: data.likes_count || 0,
+          dislikes_count: data.dislikes_count || 0,
+          comments_count: data.comments_count || 0,
+          reposts_count: data.reposts_count || 0,
         },
-        ...currentPosts
+        ...currentPosts,
       ]);
 
       return data;
     } catch (err: any) {
-      console.error('Error in createPost:', err);
+      console.error("Error in createPost:", err);
       setError(err.message);
       throw err;
     }
@@ -420,7 +487,7 @@ export function PostProvider({ children }: { children: React.ReactNode }) {
 export function usePosts() {
   const context = useContext(PostContext);
   if (context === undefined) {
-    throw new Error('usePosts must be used within a PostProvider');
+    throw new Error("usePosts must be used within a PostProvider");
   }
   return context;
 }
